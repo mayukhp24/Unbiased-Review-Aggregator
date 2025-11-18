@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TruthTally</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-bs-theme', savedTheme);
+        })();
+    </script>
+
+</head>
+<body class="bg-light-subtle">
+
+    <div class="theme-toggle-btn">
+        <button class="btn btn-outline-secondary rounded-circle p-2" id="theme-toggle">
+            <i class="bi bi-moon-stars-fill" id="theme-icon-moon"></i>
+            <i class="bi bi-sun-fill d-none" id="theme-icon-sun"></i>
+        </button>
+    </div>
+
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                
+                <div class="card shadow-sm border-0 rounded-4">
+                    <div class="card-body p-4 p-md-5">
+
+                        <h1 class="h3 fw-bold text-center mb-1">
+                            <i class="bi bi-shield-check-2 text-primary"></i> TruthTally - Unbiased Review Aggregator
+                        </h1>
+                        <p class="text-center text-muted mb-4">Get an AI-powered verdict on product reviews.</p>
+
+                        <form id="url-form">
+                            <div class="input-group mb-3 shadow-sm">
+                                <input type="text" id="url-input" class="form-control form-control-lg rounded-start" name="product_url" placeholder="Paste Amazon URL here..." required>
+                                <button type="submit" id="analyze-button" class="btn btn-primary btn-lg fw-semibold rounded-end">Analyze</button>
+                            </div>
+                        </form>
+
+                        <div id="loading-message" class="text-center my-4 d-none">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Scraping and analyzing... This may take a moment.</p>
+                        </div>
+
+                        <div id="results-container"></div>
+                    </div>
+                </div>
+
+                <p class="text-center text-muted small mt-3">Powered by Flask, Selenium, and Gemini</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        const toggleBtn = document.getElementById('theme-toggle');
+        const moonIcon = document.getElementById('theme-icon-moon');
+        const sunIcon = document.getElementById('theme-icon-sun');
+        const htmlEl = document.documentElement;
+
+        if (htmlEl.getAttribute('data-bs-theme') === 'dark') {
+            moonIcon.classList.add('d-none');
+            sunIcon.classList.remove('d-none');
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            const currentTheme = htmlEl.getAttribute('data-bs-theme');
+            if (currentTheme === 'dark') {
+                htmlEl.setAttribute('data-bs-theme', 'light');
+                localStorage.setItem('theme', 'light');
+                moonIcon.classList.remove('d-none');
+                sunIcon.classList.add('d-none');
+            } else {
+                htmlEl.setAttribute('data-bs-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                moonIcon.classList.add('d-none');
+                sunIcon.classList.remove('d-none');
+            }
+        });
+
+        
+        document.getElementById('url-form').addEventListener('submit', async function(event) {
+            event.preventDefault(); 
+            
+            const loadingDiv = document.getElementById('loading-message');
+            const resultsDiv = document.getElementById('results-container');
+            const button = document.getElementById('analyze-button');
+            const buttonText = button.innerHTML; 
+
+            loadingDiv.classList.remove('d-none');
+            resultsDiv.innerHTML = ''; 
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Analyzing...';
+
+            try {
+                const formData = new FormData(this);
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                const results = await response.json();
+                
+                loadingDiv.classList.add('d-none'); 
+                
+                if (!response.ok) {
+                    throw new Error(results.error || 'Something went wrong');
+                }
+
+                // --- UPDATED Results HTML ---
+                // All 4 list items are now present in this list.
+                const resultsHTML = `
+                    <div class="card bg-body-tertiary border-0 rounded-3 mt-4 animation-fade-in">
+                        <div class="card-body">
+                            <h4 class="card-title fw-semibold">Analysis Complete</h4>
+                            
+                            <figure class="mt-4">
+                                <blockquote class="blockquote fs-6">
+                                    <p>"${results.verdict}"</p>
+                                </blockquote>
+                                <figcaption class="blockquote-footer">
+                                    AI-Generated Verdict
+                                </figcaption>
+                            </figure>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-success"><i class="bi bi-plus-circle-fill"></i> Common Pros</h6>
+                                    <ul class="list-unstyled ms-3">
+                                        ${results.pros.map(pro => `<li><small>${pro}</small></li>`).join('')}
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-danger"><i class="bi bi-dash-circle-fill"></i> Common Cons</h6>
+                                    <ul class="list-unstyled ms-3">
+                                        ${results.cons.map(con => `<li><small>${con}</small></li>`).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <hr>
+                            
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center bg-body-tertiary">
+                                    Final Verdict (from scores):
+                                    <span class="badge ${results.interpretation === 'Overall Positive' ? 'bg-success' : (results.interpretation === 'Overall Negative' ? 'bg-danger' : 'bg-warning')}">${results.interpretation}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center bg-body-tertiary">
+                                    Total Reviews Analyzed:
+                                    <span class="badge bg-secondary rounded-pill">${results.review_count}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center bg-body-tertiary">
+                                    <span>
+                                        VADER Score (Sentiment):
+                                        <i class="bi bi-info-circle-fill ms-1 text-muted" 
+                                           data-bs-toggle="tooltip" 
+                                           data-bs-placement="top"
+                                           data-bs-title="Measures review opinion from -1.0 (very negative) to +1.0 (very positive). A score near 0.0 is neutral. Higher is better."></i>
+                                    </span>
+                                    <span class="fw-bold">${results.avg_vader_score}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center bg-body-tertiary">
+                                    <span>
+                                        TextBlob Score (Polarity):
+                                        <i class="bi bi-info-circle-fill ms-1 text-muted" 
+                                           data-bs-toggle="tooltip" 
+                                           data-bs-placement="top"
+                                           data-bs-title="Measures review opinion from -1.0 (very negative) to +1.0 (very positive). A score near 0.0 is neutral. Higher is better."></i>
+                                    </span>
+                                    <span class="fw-bold">${results.avg_tb_score}</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                resultsDiv.innerHTML = resultsHTML;
+
+                // --- INITIALIZE ALL TOOLTIPS ---
+                const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+
+            } catch (error) {
+                loadingDiv.classList.add('d-none');
+                resultsDiv.innerHTML = `
+                    <div class="alert alert-danger mt-4" role="alert">
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
+            } finally {
+                button.disabled = false;
+                button.innerHTML = buttonText;
+            }
+        });
+    </script>
+</body>
+</html>

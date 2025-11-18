@@ -1,0 +1,39 @@
+body {
+    /* Set minimum height so the background fills the entire page */
+    min-height: 100vh;
+}
+
+/* Position the theme toggle button */
+.theme-toggle-btn {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 1000; /* Make sure it's on top of other content */
+}
+
+/* 1. Define the "fade-in" animation 
+   It starts at 0% opacity and 10px "up"
+   It ends at 100% opacity at its normal position
+*/
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 2. Create a class we can use to apply this animation
+*/
+.animation-fade-in {
+  /* Run the 'fadeIn' animation over 0.5 seconds */
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Change cursor to a 'help' icon on tooltip hover */
+[data-bs-toggle="tooltip"] {
+    cursor: help;
+}
