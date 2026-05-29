@@ -2,7 +2,7 @@
 
 TruthTally is a full-stack web application that helps users make better purchasing decisions. It scrapes product reviews from Amazon, analyzes sentiment using NLP libraries, and leverages the Google Gemini API to generate an unbiased, AI-written verdict with Pros & Cons.
 
-![App Screenshot](screenshots\preview.png)
+![App Screenshot](screenshots/preview.png)
 
 ## 🌟 Features
 

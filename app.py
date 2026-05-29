@@ -10,8 +10,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-# --- THIS IMPORT WAS MISSING ---
-from webdriver_manager.chrome import ChromeDriverManager 
+from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 from selenium_stealth import stealth
 from textblob import TextBlob
@@ -30,20 +29,13 @@ except TypeError:
 # Initialize the Flask App
 app = Flask(__name__)
 
-# --- NEW: GEMINI-BASED SUMMARY FUNCTION ---
 def generate_ai_summary(text_blob):
     try:
         model = genai.GenerativeModel('models/gemini-2.5-flash')
-        # NEW: Import the JSON library at the top of app.py
         import json
 
-        # ... (in your generate_ai_summary function)
-
-        # NEW: Tell the model to output JSON
         generation_config = genai.GenerationConfig(response_mime_type="application/json")
         model = genai.GenerativeModel('models/gemini-flash-latest', generation_config=generation_config)
-        # This is our prompt to the AI
-        # This is our new, more advanced prompt
         prompt = f"""
         You are a product review summarizer. I will give you a block of raw product reviews.
         Your job is to read all of them and generate a response in a strict JSON format.
@@ -68,13 +60,11 @@ def generate_ai_summary(text_blob):
         
         response = model.generate_content(prompt)
 
-        # NEW: Parse the JSON response
         response_data = json.loads(response.text)
-        return response_data # Return the whole Python dictionary
+        return response_data
 
     except Exception as e:
         print(f"Gemini API error: {e}")
-        # NEW: Return an error in the same JSON format
         return {
             "verdict": "Could not generate AI summary. The API may be down or the key invalid.",
             "pros": [],
@@ -107,8 +97,6 @@ def analyze():
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option('useAutomationExtension', False)
         
-        # --- NEW: Use ChromeDriverManager to auto-handle versions ---
-        # It checks your browser version and downloads the matching driver.
         try:
             service = Service(ChromeDriverManager().install())
         except Exception as e:
@@ -116,9 +104,6 @@ def analyze():
             print("This can sometimes be fixed by running: pip install --upgrade webdriver-manager")
             return jsonify({'error': 'Could not auto-install chromedriver.'}), 500
 
-        # --- ALL THE LINES BELOW WERE INDENTED INCORRECTLY ---
-        # They are now correctly INSIDE the 'try' block
-        
         driver = webdriver.Chrome(service=service, options=options)
         wait = WebDriverWait(driver, 15)
         #stealth(driver, languages=["en-US", "en"], vendor="Google Inc.", platform="Win32")
@@ -169,7 +154,6 @@ def analyze():
         else:
             interpretation = "Overall Neutral"
 
-        # --- NEW: Call the AI summary function ---
         all_reviews_text = " ".join(reviews_list)
         summary = generate_ai_summary(all_reviews_text) 
 
