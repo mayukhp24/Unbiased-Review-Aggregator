@@ -37,3 +37,15 @@ body {
 [data-bs-toggle="tooltip"] {
     cursor: help;
 }
+
+/* Build/version marker so we can confirm the latest commit is deployed */
+.build-tag {
+    position: fixed;
+    bottom: 0.75rem;
+    right: 0.75rem;
+    z-index: 1000;
+    font-family: monospace;
+    font-size: 0.75rem;
+    opacity: 0.6;
+    color: var(--bs-secondary-color);
+}
