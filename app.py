@@ -96,6 +96,12 @@ def analyze():
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
+        # --- Memory-reduction flags for low-RAM hosts (e.g. Render free tier) ---
+        options.add_argument("--single-process")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-software-rasterizer")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--blink-settings=imagesEnabled=false")
         options.add_argument("--lang=en-US,en")
         options.add_argument(
             "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
