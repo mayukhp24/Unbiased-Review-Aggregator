@@ -91,11 +91,16 @@ def analyze():
 
         # --- 1. SET UP THE SELENIUM SCRAPER ---
         options = webdriver.ChromeOptions()
-        options.add_argument("--headless")
-        options.add_argument("--start-maximized")
+        options.add_argument("--headless=new")
+        options.add_argument("--window-size=1920,1080")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--lang=en-US,en")
+        options.add_argument(
+            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        )
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option('useAutomationExtension', False)
 
@@ -113,7 +118,15 @@ def analyze():
 
         driver = webdriver.Chrome(service=service, options=options)
         wait = WebDriverWait(driver, 15)
-        #stealth(driver, languages=["en-US", "en"], vendor="Google Inc.", platform="Win32")
+        stealth(
+            driver,
+            languages=["en-US", "en"],
+            vendor="Google Inc.",
+            platform="Win32",
+            webgl_vendor="Intel Inc.",
+            renderer="Intel Iris OpenGL Engine",
+            fix_hairline=True,
+        )
 
         # --- 2. RUN THE SCRAPER ---
         driver.get(url)
@@ -124,23 +137,50 @@ def analyze():
             time.sleep(random.uniform(1, 2))
             continue_button.click()
         except Exception:
-            pass 
+            pass
 
-        wait.until(EC.visibility_of_element_located((By.ID, "reviewsMedley")))
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        try:
+            wait.until(EC.visibility_of_element_located((By.ID, "reviewsMedley")))
+        except Exception:
+            pass
+
+        page_source = driver.page_source
+        soup = BeautifulSoup(page_source, 'html.parser')
+        page_title = soup.title.text.strip() if soup.title else ""
+
+        # --- Detect Amazon bot / CAPTCHA pages ---
+        lowered = page_source.lower()
+        bot_blocked = any(marker in lowered for marker in [
+            "api-services-support@amazon",
+            "type the characters you see",
+            "enter the characters you see",
+            "robot check",
+            "to discuss automated access",
+            "/errors/validatecaptcha",
+        ])
 
         # --- 3. EXTRACT THE REVIEWS ---
         reviews_list = []
-        review_elements = soup.select('div[id*="review-card"]')
-        
+        review_elements = soup.select(
+            'div[data-hook="review"], li[data-hook="review"], '
+            'div[id^="customer_review"], div[id*="review-card"]'
+        )
+
         for item in review_elements:
             review_body_element = item.select_one('span[data-hook="review-body"], span.review-text-content')
             review_body = review_body_element.text.strip() if review_body_element else ""
             if review_body:
                 reviews_list.append(review_body)
-        
+
+        print(f"[DIAG] title={page_title!r} bot_blocked={bot_blocked} "
+              f"review_blocks={len(review_elements)} reviews={len(reviews_list)}")
+
         if not reviews_list:
-            return jsonify({'error': 'Could not find any reviews for this product.'}), 400
+            if bot_blocked:
+                return jsonify({'error': 'Amazon blocked the request with a bot/CAPTCHA page. '
+                                         'This is expected when scraping from a cloud server IP.'}), 400
+            return jsonify({'error': f'Could not find any reviews. '
+                                     f'(page title: "{page_title}", review blocks found: {len(review_elements)})'}), 400
 
         # --- 4. RUN SENTIMENT & AI SUMMARY ---
         analyzer = SentimentIntensityAnalyzer()
