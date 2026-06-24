@@ -55,3 +55,14 @@ TruthTally is a full-stack web application that helps users make better purchasi
 
 ## ⚠️ Note
 This tool requires **Google Chrome** to be installed on the machine.
+
+## ☁️ Deploying to Render
+
+The repo includes a `Dockerfile` (bundles headless Chromium so Selenium works in the container) and a `render.yaml` Blueprint.
+
+1.  Push this repo to your own GitHub account.
+2.  In Render, choose **New +** → **Blueprint** and select the repo.
+3.  Render reads `render.yaml` and prompts you for the `GEMINI_API_KEY` value — enter it there. It's stored as an encrypted environment variable on Render and is never written to the repo.
+4.  Deploy. Render builds the Docker image and runs the app with Gunicorn.
+
+Your API key only ever lives server-side (Render's env vars); visitors to the deployed app can use the `/analyze` endpoint but never see the key itself.
