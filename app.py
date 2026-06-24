@@ -172,23 +172,30 @@ def analyze():
             'div[id^="customer_review"], div[id*="review-card"]'
         )
 
+        # Amazon injects accessibility "teaser" text into the review body; strip it.
+        noise_phrases = (
+            "Brief content visible, double tap to read full content.",
+            "Full content visible, double tap to read brief content.",
+        )
         body_selectors = (
+            '[data-hook="reviewText"], '
             'span[data-hook="review-body"], '
             'div[data-hook="review-collapsed"], '
-            'span[data-hook="review-collapsed"], '
             'span.review-text-content, '
-            'div.review-text-content, '
-            '.reviewText, '
-            '[data-hook="review-body"]'
+            '.review-text-content'
         )
         for item in review_elements:
-            review_body_element = item.select_one(body_selectors)
-            review_body = review_body_element.get_text(" ", strip=True) if review_body_element else ""
-            # Fallback: use the block's own text if no specific body element matched
-            if not review_body:
-                block_text = item.get_text(" ", strip=True)
-                if len(block_text) > 40:
-                    review_body = block_text
+            body_element = item.select_one(body_selectors)
+            review_body = ""
+            if body_element:
+                # Drop the collapsed/expanded accessibility teaser divs first
+                for junk in body_element.select(
+                    '.a-teaser-describedby-collapsed, .a-teaser-describedby-expanded'
+                ):
+                    junk.decompose()
+                review_body = body_element.get_text(" ", strip=True)
+                for noise in noise_phrases:
+                    review_body = review_body.replace(noise, "").strip()
             if review_body:
                 reviews_list.append(review_body)
 
