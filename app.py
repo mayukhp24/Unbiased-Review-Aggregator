@@ -94,11 +94,18 @@ def analyze():
         options.add_argument("--headless")
         options.add_argument("--start-maximized")
         options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option('useAutomationExtension', False)
-        
+
+        chrome_binary = os.getenv("CHROME_BIN")
+        if chrome_binary:
+            options.binary_location = chrome_binary
+
+        chromedriver_path = os.getenv("CHROMEDRIVER_PATH")
         try:
-            service = Service(ChromeDriverManager().install())
+            service = Service(chromedriver_path) if chromedriver_path else Service(ChromeDriverManager().install())
         except Exception as e:
             print(f"Error installing chromedriver: {e}")
             print("This can sometimes be fixed by running: pip install --upgrade webdriver-manager")
@@ -178,4 +185,6 @@ def analyze():
 
 # Run the app
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.getenv("PORT", 5000))
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host="0.0.0.0", port=port, debug=debug)
