@@ -7,6 +7,7 @@
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
     <script>
@@ -17,9 +18,9 @@
     </script>
 
 </head>
-<body class="bg-light-subtle">
+<body>
 
-    <div class="build-tag">test_build#5</div>
+    <div class="build-tag">test_build#6</div>
 
     <div class="theme-toggle-btn">
         <button class="btn btn-outline-secondary rounded-circle p-2" id="theme-toggle">
@@ -32,23 +33,26 @@
         <div class="row justify-content-center">
             <div class="col-lg-8">
                 
-                <div class="card shadow-sm border-0 rounded-4">
+                <div class="card main-card shadow-sm border-0 rounded-4">
                     <div class="card-body p-4 p-md-5">
 
+                        <div class="brand-icon">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
                         <h1 class="h3 fw-bold text-center mb-1">
-                            <i class="bi bi-shield-check-2 text-primary"></i> TruthTally - Unbiased Review Aggregator
+                            <span class="brand-title">TruthTally</span>
                         </h1>
                         <p class="text-center text-muted mb-4">Get an AI-powered verdict on product reviews.</p>
 
                         <form id="url-form">
                             <div class="input-group mb-3 shadow-sm">
                                 <input type="text" id="url-input" class="form-control form-control-lg rounded-start" name="product_url" placeholder="Paste Amazon URL here..." required>
-                                <button type="submit" id="analyze-button" class="btn btn-primary btn-lg fw-semibold rounded-end">Analyze</button>
+                                <button type="submit" id="analyze-button" class="btn btn-gradient btn-lg fw-semibold rounded-end">Analyze</button>
                             </div>
                         </form>
 
                         <div id="loading-message" class="text-center my-4 d-none">
-                            <div class="spinner-border text-primary" role="status">
+                            <div class="spinner-border" role="status" style="color: var(--accent-1);">
                                 <span class="visually-hidden">Loading...</span>
                             </div>
                             <p class="mt-2 text-muted">Scraping and analyzing... This may take a moment.</p>
@@ -134,67 +138,64 @@
 
                 // --- UPDATED Results HTML ---
                 // All 4 list items are now present in this list.
+                const interpretationBadge = results.interpretation === 'Overall Positive' ? 'bg-success'
+                    : (results.interpretation === 'Overall Negative' ? 'bg-danger' : 'bg-warning');
+
                 const resultsHTML = `
                     <div class="card bg-body-tertiary border-0 rounded-3 mt-4 animation-fade-in">
                         <div class="card-body">
-                            <h4 class="card-title fw-semibold">Analysis Complete</h4>
-                            
-                            <figure class="mt-4">
-                                <blockquote class="blockquote fs-6">
-                                    <p>"${results.verdict}"</p>
-                                </blockquote>
-                                <figcaption class="blockquote-footer">
-                                    AI-Generated Verdict
-                                </figcaption>
-                            </figure>
+                            <h4 class="card-title fw-semibold mb-3">Analysis Complete</h4>
+
+                            <div class="verdict-quote mb-4">
+                                <p class="mb-1">"${results.verdict}"</p>
+                                <small class="text-muted">— AI-Generated Verdict</small>
+                            </div>
 
                             <div class="row">
-                                <div class="col-md-6">
-                                    <h6 class="text-success"><i class="bi bi-plus-circle-fill"></i> Common Pros</h6>
-                                    <ul class="list-unstyled ms-3">
+                                <div class="col-md-6 mb-3">
+                                    <h6><span class="pill-icon pros"><i class="bi bi-plus-lg"></i></span>Common Pros</h6>
+                                    <ul class="list-unstyled ms-4">
                                         ${results.pros.map(pro => `<li><small>${pro}</small></li>`).join('')}
                                     </ul>
                                 </div>
-                                <div class="col-md-6">
-                                    <h6 class="text-danger"><i class="bi bi-dash-circle-fill"></i> Common Cons</h6>
-                                    <ul class="list-unstyled ms-3">
+                                <div class="col-md-6 mb-3">
+                                    <h6><span class="pill-icon cons"><i class="bi bi-dash-lg"></i></span>Common Cons</h6>
+                                    <ul class="list-unstyled ms-4">
                                         ${results.cons.map(con => `<li><small>${con}</small></li>`).join('')}
                                     </ul>
                                 </div>
                             </div>
 
-                            <hr>
-                            
-                            <ul class="list-group list-group-flush">
-                                <li class="list-group-item d-flex justify-content-between align-items-center bg-body-tertiary">
-                                    Final Verdict (from scores):
-                                    <span class="badge ${results.interpretation === 'Overall Positive' ? 'bg-success' : (results.interpretation === 'Overall Negative' ? 'bg-danger' : 'bg-warning')}">${results.interpretation}</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center bg-body-tertiary">
-                                    Total Reviews Analyzed:
-                                    <span class="badge bg-secondary rounded-pill">${results.review_count}</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center bg-body-tertiary">
-                                    <span>
-                                        VADER Score (Sentiment):
-                                        <i class="bi bi-info-circle-fill ms-1 text-muted" 
-                                           data-bs-toggle="tooltip" 
+                            <div class="stat-grid mt-2">
+                                <div class="stat-card">
+                                    <div class="stat-label">Final Verdict (from scores)</div>
+                                    <div class="stat-value"><span class="badge ${interpretationBadge}">${results.interpretation}</span></div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Total Reviews Analyzed</div>
+                                    <div class="stat-value">${results.review_count}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">
+                                        VADER Score (Sentiment)
+                                        <i class="bi bi-info-circle-fill ms-1 text-muted"
+                                           data-bs-toggle="tooltip"
                                            data-bs-placement="top"
                                            data-bs-title="Measures review opinion from -1.0 (very negative) to +1.0 (very positive). A score near 0.0 is neutral. Higher is better."></i>
-                                    </span>
-                                    <span class="fw-bold">${results.avg_vader_score}</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center bg-body-tertiary">
-                                    <span>
-                                        TextBlob Score (Polarity):
-                                        <i class="bi bi-info-circle-fill ms-1 text-muted" 
-                                           data-bs-toggle="tooltip" 
+                                    </div>
+                                    <div class="stat-value">${results.avg_vader_score}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">
+                                        TextBlob Score (Polarity)
+                                        <i class="bi bi-info-circle-fill ms-1 text-muted"
+                                           data-bs-toggle="tooltip"
                                            data-bs-placement="top"
                                            data-bs-title="Measures review opinion from -1.0 (very negative) to +1.0 (very positive). A score near 0.0 is neutral. Higher is better."></i>
-                                    </span>
-                                    <span class="fw-bold">${results.avg_tb_score}</span>
-                                </li>
-                            </ul>
+                                    </div>
+                                    <div class="stat-value">${results.avg_tb_score}</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 `;
