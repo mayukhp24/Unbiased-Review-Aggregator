@@ -19,7 +19,7 @@
 </head>
 <body class="bg-light-subtle">
 
-    <div class="build-tag">test_build#4</div>
+    <div class="build-tag">test_build#5</div>
 
     <div class="theme-toggle-btn">
         <button class="btn btn-outline-secondary rounded-circle p-2" id="theme-toggle">
@@ -111,10 +111,23 @@
                     method: 'POST',
                     body: formData
                 });
-                const results = await response.json();
-                
-                loadingDiv.classList.add('d-none'); 
-                
+
+                loadingDiv.classList.add('d-none');
+
+                // The server should return JSON. If it returns HTML (e.g. a
+                // Render 502/503 page after a worker crash or timeout), give a
+                // friendly message instead of a raw JSON parse error.
+                const raw = await response.text();
+                let results;
+                try {
+                    results = JSON.parse(raw);
+                } catch (e) {
+                    if (response.status === 502 || response.status === 503 || response.status === 504) {
+                        throw new Error('The server ran out of memory or timed out while analyzing (the free host is limited). Please wait a moment and try again.');
+                    }
+                    throw new Error(`The server returned an unexpected response (HTTP ${response.status}). Please try again.`);
+                }
+
                 if (!response.ok) {
                     throw new Error(results.error || 'Something went wrong');
                 }
