@@ -172,21 +172,43 @@ def analyze():
             'div[id^="customer_review"], div[id*="review-card"]'
         )
 
+        body_selectors = (
+            'span[data-hook="review-body"], '
+            'div[data-hook="review-collapsed"], '
+            'span[data-hook="review-collapsed"], '
+            'span.review-text-content, '
+            'div.review-text-content, '
+            '.reviewText, '
+            '[data-hook="review-body"]'
+        )
         for item in review_elements:
-            review_body_element = item.select_one('span[data-hook="review-body"], span.review-text-content')
-            review_body = review_body_element.text.strip() if review_body_element else ""
+            review_body_element = item.select_one(body_selectors)
+            review_body = review_body_element.get_text(" ", strip=True) if review_body_element else ""
+            # Fallback: use the block's own text if no specific body element matched
+            if not review_body:
+                block_text = item.get_text(" ", strip=True)
+                if len(block_text) > 40:
+                    review_body = block_text
             if review_body:
                 reviews_list.append(review_body)
 
+        # If extraction failed, expose the first block's structure for debugging
+        sample_structure = ""
+        if not reviews_list and review_elements:
+            first = review_elements[0]
+            hooks = sorted({el.get("data-hook") for el in first.select("[data-hook]") if el.get("data-hook")})
+            sample_structure = " data-hooks=" + ",".join(hooks)
+
         print(f"[DIAG] title={page_title!r} bot_blocked={bot_blocked} "
-              f"review_blocks={len(review_elements)} reviews={len(reviews_list)}")
+              f"review_blocks={len(review_elements)} reviews={len(reviews_list)}{sample_structure}")
 
         if not reviews_list:
             if bot_blocked:
                 return jsonify({'error': 'Amazon blocked the request with a bot/CAPTCHA page. '
                                          'This is expected when scraping from a cloud server IP.'}), 400
             return jsonify({'error': f'Could not find any reviews. '
-                                     f'(page title: "{page_title}", review blocks found: {len(review_elements)})'}), 400
+                                     f'(page title: "{page_title}", review blocks found: {len(review_elements)},'
+                                     f'{sample_structure})'}), 400
 
         # --- 4. RUN SENTIMENT & AI SUMMARY ---
         analyzer = SentimentIntensityAnalyzer()
