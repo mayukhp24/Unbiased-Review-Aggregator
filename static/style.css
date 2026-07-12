@@ -234,14 +234,3 @@ body {
 .animation-fade-in { animation: fadeIn 0.5s ease-out; }
 
 [data-bs-toggle="tooltip"] { cursor: help; }
-
-.build-tag {
-    position: fixed;
-    bottom: 0.75rem;
-    right: 0.75rem;
-    z-index: 1000;
-    font-family: monospace;
-    font-size: 0.75rem;
-    opacity: 0.55;
-    color: var(--tt-muted);
-}
