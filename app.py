@@ -318,7 +318,20 @@ def analyze():
 
     finally:
         if driver:
-            driver.quit()
+            # Quitting a driver whose Chrome session already crashed can itself
+            # raise; guard it so it never escapes the finally block as a 500.
+            try:
+                driver.quit()
+            except Exception as quit_error:
+                print(f"[WARN] driver.quit() failed: {quit_error}")
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(e):
+    """Safety net: always return JSON, never an HTML error page, so the
+    frontend can display a clean message instead of failing to parse."""
+    print(f"[ERROR] unhandled exception: {type(e).__name__}: {e}")
+    return jsonify({'error': "Something went wrong on the server. Please try again in a moment."}), 500
 
 # Run the app
 if __name__ == '__main__':
