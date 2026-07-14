@@ -145,8 +145,25 @@ def analyze():
         except Exception:
             pass
 
+        # Scroll down in steps to trigger Amazon's lazy-loaded reviews section.
         try:
-            wait.until(EC.visibility_of_element_located((By.ID, "reviewsMedley")))
+            last_height = driver.execute_script("return document.body.scrollHeight")
+            for _ in range(8):
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(1.0)
+                new_height = driver.execute_script("return document.body.scrollHeight")
+                # Stop early once actual review elements are present
+                if driver.find_elements(By.CSS_SELECTOR, '[data-hook="review"]'):
+                    break
+                if new_height == last_height:
+                    break
+                last_height = new_height
+        except Exception:
+            pass
+
+        # Give the reviews a final chance to render after scrolling.
+        try:
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-hook="review"]')))
         except Exception:
             pass
 
