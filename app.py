@@ -1,6 +1,8 @@
 import time
 import random
 import os
+import re
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -28,6 +30,104 @@ except TypeError:
 
 # Initialize the Flask App
 app = Flask(__name__)
+
+# --- Review-scraping selectors / constants ---
+REVIEW_BLOCK_SELECTOR = (
+    'div[data-hook="review"], li[data-hook="review"], '
+    'div[id^="customer_review"], div[id*="review-card"]'
+)
+REVIEW_BODY_SELECTOR = (
+    '[data-hook="reviewText"], '
+    'span[data-hook="review-body"], '
+    'div[data-hook="review-collapsed"], '
+    'span.review-text-content, '
+    '.review-text-content'
+)
+# Amazon injects accessibility "teaser" text into the review body; strip it.
+NOISE_PHRASES = (
+    "Brief content visible, double tap to read full content.",
+    "Full content visible, double tap to read brief content.",
+)
+BOT_MARKERS = (
+    "api-services-support@amazon",
+    "type the characters you see",
+    "enter the characters you see",
+    "robot check",
+    "to discuss automated access",
+    "/errors/validatecaptcha",
+)
+
+
+def scrape_reviews(driver, wait, target_url):
+    """Load a page, trigger lazy-loaded reviews, and extract the review text.
+
+    Returns (reviews_list, page_title, bot_blocked, block_count, sample_structure).
+    """
+    driver.get(target_url)
+
+    # Dismiss the "Continue shopping" interstitial if it appears.
+    try:
+        continue_button = wait.until(
+            EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Continue shopping')]"))
+        )
+        time.sleep(random.uniform(1, 2))
+        continue_button.click()
+    except Exception:
+        pass
+
+    # Scroll down in steps to trigger Amazon's lazy-loaded reviews section.
+    try:
+        last_height = driver.execute_script("return document.body.scrollHeight")
+        for _ in range(8):
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(1.0)
+            if driver.find_elements(By.CSS_SELECTOR, '[data-hook="review"]'):
+                break
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
+    except Exception:
+        pass
+
+    # Final chance for the reviews to render after scrolling.
+    try:
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-hook="review"]')))
+    except Exception:
+        pass
+
+    page_source = driver.page_source
+    soup = BeautifulSoup(page_source, 'html.parser')
+    page_title = soup.title.text.strip() if soup.title else ""
+    lowered = page_source.lower()
+    bot_blocked = any(marker in lowered for marker in BOT_MARKERS)
+
+    review_elements = soup.select(REVIEW_BLOCK_SELECTOR)
+    reviews_list = []
+    for item in review_elements:
+        body_element = item.select_one(REVIEW_BODY_SELECTOR)
+        review_body = ""
+        if body_element:
+            # Drop the collapsed/expanded accessibility teaser divs first.
+            for junk in body_element.select(
+                '.a-teaser-describedby-collapsed, .a-teaser-describedby-expanded'
+            ):
+                junk.decompose()
+            review_body = body_element.get_text(" ", strip=True)
+            for noise in NOISE_PHRASES:
+                review_body = review_body.replace(noise, "").strip()
+        if review_body:
+            reviews_list.append(review_body)
+
+    # If extraction failed, expose the first block's structure for debugging.
+    sample_structure = ""
+    if not reviews_list and review_elements:
+        first = review_elements[0]
+        hooks = sorted({el.get("data-hook") for el in first.select("[data-hook]") if el.get("data-hook")})
+        sample_structure = " data-hooks=" + ",".join(hooks)
+
+    return reviews_list, page_title, bot_blocked, len(review_elements), sample_structure
+
 
 def generate_ai_summary(text_blob):
     try:
@@ -138,97 +238,33 @@ def analyze():
             fix_hairline=True,
         )
 
-        # --- 2. RUN THE SCRAPER ---
-        driver.get(url)
-        try:
-            continue_button = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Continue shopping')]"))
+        # --- 2. SCRAPE REVIEWS (try several sources) ---
+        # The inline product page sometimes omits reviews for a headless/
+        # datacenter browser, so also try Amazon's dedicated reviews page
+        # (more review-dense) and retry it once, since failures are often
+        # intermittent.
+        candidate_urls = [url]
+        asin_match = re.search(r'/(?:dp|gp/product|product|product-reviews)/([A-Z0-9]{10})', url)
+        if asin_match:
+            asin = asin_match.group(1)
+            netloc = urlparse(url).netloc or "www.amazon.com"
+            reviews_url = (
+                f"https://{netloc}/product-reviews/{asin}/"
+                "?sortBy=recent&reviewerType=all_reviews&pageNumber=1"
             )
-            time.sleep(random.uniform(1, 2))
-            continue_button.click()
-        except Exception:
-            pass
+            candidate_urls += [reviews_url, reviews_url]  # try, then one retry
 
-        # Scroll down in steps to trigger Amazon's lazy-loaded reviews section.
-        try:
-            last_height = driver.execute_script("return document.body.scrollHeight")
-            for _ in range(8):
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(1.0)
-                new_height = driver.execute_script("return document.body.scrollHeight")
-                # Stop early once actual review elements are present
-                if driver.find_elements(By.CSS_SELECTOR, '[data-hook="review"]'):
-                    break
-                if new_height == last_height:
-                    break
-                last_height = new_height
-        except Exception:
-            pass
-
-        # Give the reviews a final chance to render after scrolling.
-        try:
-            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '[data-hook="review"]')))
-        except Exception:
-            pass
-
-        page_source = driver.page_source
-        soup = BeautifulSoup(page_source, 'html.parser')
-        page_title = soup.title.text.strip() if soup.title else ""
-
-        # --- Detect Amazon bot / CAPTCHA pages ---
-        lowered = page_source.lower()
-        bot_blocked = any(marker in lowered for marker in [
-            "api-services-support@amazon",
-            "type the characters you see",
-            "enter the characters you see",
-            "robot check",
-            "to discuss automated access",
-            "/errors/validatecaptcha",
-        ])
-
-        # --- 3. EXTRACT THE REVIEWS ---
         reviews_list = []
-        review_elements = soup.select(
-            'div[data-hook="review"], li[data-hook="review"], '
-            'div[id^="customer_review"], div[id*="review-card"]'
-        )
-
-        # Amazon injects accessibility "teaser" text into the review body; strip it.
-        noise_phrases = (
-            "Brief content visible, double tap to read full content.",
-            "Full content visible, double tap to read brief content.",
-        )
-        body_selectors = (
-            '[data-hook="reviewText"], '
-            'span[data-hook="review-body"], '
-            'div[data-hook="review-collapsed"], '
-            'span.review-text-content, '
-            '.review-text-content'
-        )
-        for item in review_elements:
-            body_element = item.select_one(body_selectors)
-            review_body = ""
-            if body_element:
-                # Drop the collapsed/expanded accessibility teaser divs first
-                for junk in body_element.select(
-                    '.a-teaser-describedby-collapsed, .a-teaser-describedby-expanded'
-                ):
-                    junk.decompose()
-                review_body = body_element.get_text(" ", strip=True)
-                for noise in noise_phrases:
-                    review_body = review_body.replace(noise, "").strip()
-            if review_body:
-                reviews_list.append(review_body)
-
-        # If extraction failed, expose the first block's structure for debugging
-        sample_structure = ""
-        if not reviews_list and review_elements:
-            first = review_elements[0]
-            hooks = sorted({el.get("data-hook") for el in first.select("[data-hook]") if el.get("data-hook")})
-            sample_structure = " data-hooks=" + ",".join(hooks)
-
-        print(f"[DIAG] title={page_title!r} bot_blocked={bot_blocked} "
-              f"review_blocks={len(review_elements)} reviews={len(reviews_list)}{sample_structure}")
+        page_title = ""
+        bot_blocked = False
+        for attempt, target_url in enumerate(candidate_urls, start=1):
+            reviews_list, page_title, bot_blocked, block_count, sample_structure = \
+                scrape_reviews(driver, wait, target_url)
+            print(f"[DIAG] attempt={attempt}/{len(candidate_urls)} url={target_url} "
+                  f"title={page_title!r} bot_blocked={bot_blocked} "
+                  f"review_blocks={block_count} reviews={len(reviews_list)}{sample_structure}")
+            if reviews_list:
+                break
 
         if not reviews_list:
             if bot_blocked:
