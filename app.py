@@ -87,7 +87,11 @@ def index():
 def analyze():
     driver = None
     try:
-        url = request.form['product_url']
+        url = request.form['product_url'].strip()
+        # Chrome's driver.get() rejects a URL with no scheme ("invalid argument"),
+        # and users often paste a bare domain, so normalize it here.
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
 
         # --- 1. SET UP THE SELENIUM SCRAPER ---
         options = webdriver.ChromeOptions()
