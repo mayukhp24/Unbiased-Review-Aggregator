@@ -232,11 +232,12 @@ def analyze():
 
         if not reviews_list:
             if bot_blocked:
-                return jsonify({'error': 'Amazon blocked the request with a bot/CAPTCHA page. '
-                                         'This is expected when scraping from a cloud server IP.'}), 400
-            return jsonify({'error': f'Could not find any reviews. '
-                                     f'(page title: "{page_title}", review blocks found: {len(review_elements)},'
-                                     f'{sample_structure})'}), 400
+                return jsonify({'error': "Amazon is temporarily blocking automated access for this "
+                                         "product. Please try again in a moment, or try a different "
+                                         "product link."}), 400
+            return jsonify({'error': "We couldn't find any reviews for this product. It may not have "
+                                     "reviews yet, or Amazon didn't load them this time — please try "
+                                     "another product link."}), 400
 
         # --- 4. RUN SENTIMENT & AI SUMMARY ---
         analyzer = SentimentIntensityAnalyzer()
@@ -273,7 +274,11 @@ def analyze():
         return jsonify(results)
 
     except Exception as e:
-        return jsonify({'error': f"An error occurred: {str(e)}"}), 500
+        # Log the technical details for debugging (visible in server logs),
+        # but show visitors a clean, friendly message instead of a stack trace.
+        print(f"[ERROR] analyze failed: {type(e).__name__}: {e}")
+        return jsonify({'error': "Something went wrong while analyzing this product. Please make sure "
+                                 "the link is a valid Amazon product page and try again."}), 500
 
     finally:
         if driver:
