@@ -141,6 +141,10 @@ body {
 .search-pill button:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
 .search-pill button:disabled { opacity: 0.75; cursor: default; }
 
+/* Accent button (e.g. disclaimer modal) */
+.btn-accent { background: var(--tt-accent); color: #fff; border: none; }
+.btn-accent:hover, .btn-accent:focus { background: var(--tt-accent); color: #fff; filter: brightness(1.08); }
+
 @media (max-width: 520px) {
     .search-pill { flex-wrap: wrap; }
     .search-pill button { width: 100%; margin-top: 0.4rem; }
