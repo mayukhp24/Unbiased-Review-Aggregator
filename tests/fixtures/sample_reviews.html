@@ -1,0 +1,47 @@
+<!doctype html>
+<!--
+  Synthetic Amazon-review-shaped fixture for unit tests.
+  Mirrors the real DOM contract the scraper relies on:
+    - review container:  div[data-hook="review"]
+    - review body:       [data-hook="reviewText"]
+    - accessibility teaser divs that must be stripped from the body text.
+  This is hand-written test data, NOT captured Amazon HTML.
+-->
+<html lang="en">
+<head><title>Test Product with Reviews</title></head>
+<body>
+  <div id="cm_cr-review_list">
+
+    <div data-hook="review" id="customer_review-R1AAAAAAAAAA">
+      <a data-hook="review-title"><span>Great value</span></a>
+      <span data-hook="review-star-rating">5 out of 5 stars</span>
+      <div data-hook="reviewText">
+        <div class="a-teaser-describedby-collapsed a-hidden">Brief content visible, double tap to read full content.</div>
+        <div class="a-teaser-describedby-expanded a-hidden">Full content visible, double tap to read brief content.</div>
+        <span>Excellent battery life and a bright, crisp display. Fast charging is a real bonus.</span>
+      </div>
+    </div>
+
+    <div data-hook="review" id="customer_review-R2BBBBBBBBBB">
+      <a data-hook="review-title"><span>Solid phone</span></a>
+      <span data-hook="review-star-rating">4 out of 5 stars</span>
+      <div data-hook="reviewText">
+        <div class="a-teaser-describedby-collapsed a-hidden">Brief content visible, double tap to read full content.</div>
+        <div class="a-teaser-describedby-expanded a-hidden">Full content visible, double tap to read brief content.</div>
+        <span>Smooth performance for gaming and multitasking, though the camera is average in low light.</span>
+      </div>
+    </div>
+
+    <div data-hook="review" id="customer_review-R3CCCCCCCCCC">
+      <a data-hook="review-title"><span>Good but pricey</span></a>
+      <span data-hook="review-star-rating">3 out of 5 stars</span>
+      <div data-hook="reviewText">
+        <div class="a-teaser-describedby-collapsed a-hidden">Brief content visible, double tap to read full content.</div>
+        <div class="a-teaser-describedby-expanded a-hidden">Full content visible, double tap to read brief content.</div>
+        <span>Build quality feels premium, but it is expensive for what it offers.</span>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

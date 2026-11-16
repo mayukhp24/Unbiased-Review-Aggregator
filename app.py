@@ -1,8 +1,6 @@
 import time
 import random
 import os
-import re
-from urllib.parse import urlparse
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -31,30 +29,14 @@ except TypeError:
 # Initialize the Flask App
 app = Flask(__name__)
 
-# --- Review-scraping selectors / constants ---
-REVIEW_BLOCK_SELECTOR = (
-    'div[data-hook="review"], li[data-hook="review"], '
-    'div[id^="customer_review"], div[id*="review-card"]'
-)
-REVIEW_BODY_SELECTOR = (
-    '[data-hook="reviewText"], '
-    'span[data-hook="review-body"], '
-    'div[data-hook="review-collapsed"], '
-    'span.review-text-content, '
-    '.review-text-content'
-)
-# Amazon injects accessibility "teaser" text into the review body; strip it.
-NOISE_PHRASES = (
-    "Brief content visible, double tap to read full content.",
-    "Full content visible, double tap to read brief content.",
-)
-BOT_MARKERS = (
-    "api-services-support@amazon",
-    "type the characters you see",
-    "enter the characters you see",
-    "robot check",
-    "to discuss automated access",
-    "/errors/validatecaptcha",
+# Pure business logic lives in truthtally_core so it can be unit-tested
+# without standing up Flask, Selenium, or the Gemini client.
+from truthtally_core import (
+    normalize_url,
+    build_candidate_urls,
+    interpret_sentiment,
+    is_bot_blocked,
+    parse_reviews,
 )
 
 
@@ -99,39 +81,14 @@ def scrape_reviews(driver, wait, target_url):
     page_source = driver.page_source
     soup = BeautifulSoup(page_source, 'html.parser')
     page_title = soup.title.text.strip() if soup.title else ""
-    lowered = page_source.lower()
-    bot_blocked = any(marker in lowered for marker in BOT_MARKERS)
+    bot_blocked = is_bot_blocked(page_source)
+    reviews_list, block_count, sample_structure = parse_reviews(page_source)
 
-    review_elements = soup.select(REVIEW_BLOCK_SELECTOR)
-    reviews_list = []
-    for item in review_elements:
-        body_element = item.select_one(REVIEW_BODY_SELECTOR)
-        review_body = ""
-        if body_element:
-            # Drop the collapsed/expanded accessibility teaser divs first.
-            for junk in body_element.select(
-                '.a-teaser-describedby-collapsed, .a-teaser-describedby-expanded'
-            ):
-                junk.decompose()
-            review_body = body_element.get_text(" ", strip=True)
-            for noise in NOISE_PHRASES:
-                review_body = review_body.replace(noise, "").strip()
-        if review_body:
-            reviews_list.append(review_body)
-
-    # If extraction failed, expose the first block's structure for debugging.
-    sample_structure = ""
-    if not reviews_list and review_elements:
-        first = review_elements[0]
-        hooks = sorted({el.get("data-hook") for el in first.select("[data-hook]") if el.get("data-hook")})
-        sample_structure = " data-hooks=" + ",".join(hooks)
-
-    return reviews_list, page_title, bot_blocked, len(review_elements), sample_structure
+    return reviews_list, page_title, bot_blocked, block_count, sample_structure
 
 
 def generate_ai_summary(text_blob):
     try:
-        model = genai.GenerativeModel('models/gemini-2.5-flash')
         import json
 
         generation_config = genai.GenerationConfig(response_mime_type="application/json")
@@ -140,7 +97,7 @@ def generate_ai_summary(text_blob):
         You are a product review summarizer. I will give you a block of raw product reviews.
         Your job is to read all of them and generate a response in a strict JSON format.
 
-        The JSON object must have two keys:
+        The JSON object must have three keys:
         1. "verdict": A single, objective "Verdict" in 50 words or less.
         2. "pros": A short bullet-point list (as an array of strings) of the top 2-3 most mentioned positive points.
         3. "cons": A short bullet-point list (as an array of strings) of the top 2-3 most mentioned negative points.
@@ -170,11 +127,6 @@ def generate_ai_summary(text_blob):
             "pros": [],
             "cons": []
         }
-        
-    except Exception as e:
-        print(f"Gemini API error: {e}")
-        # Fallback if API fails
-        return "Could not generate AI summary. The API may be down or the key invalid."
 
 
 # Main route to serve the HTML page
@@ -187,11 +139,7 @@ def index():
 def analyze():
     driver = None
     try:
-        url = request.form['product_url'].strip()
-        # Chrome's driver.get() rejects a URL with no scheme ("invalid argument"),
-        # and users often paste a bare domain, so normalize it here.
-        if not url.startswith(("http://", "https://")):
-            url = "https://" + url
+        url = normalize_url(request.form['product_url'])
 
         # --- 1. SET UP THE SELENIUM SCRAPER ---
         options = webdriver.ChromeOptions()
@@ -239,20 +187,7 @@ def analyze():
         )
 
         # --- 2. SCRAPE REVIEWS (try several sources) ---
-        # The inline product page sometimes omits reviews for a headless/
-        # datacenter browser, so also try Amazon's dedicated reviews page
-        # (more review-dense) and retry it once, since failures are often
-        # intermittent.
-        candidate_urls = [url]
-        asin_match = re.search(r'/(?:dp|gp/product|product|product-reviews)/([A-Z0-9]{10})', url)
-        if asin_match:
-            asin = asin_match.group(1)
-            netloc = urlparse(url).netloc or "www.amazon.com"
-            reviews_url = (
-                f"https://{netloc}/product-reviews/{asin}/"
-                "?sortBy=recent&reviewerType=all_reviews&pageNumber=1"
-            )
-            candidate_urls += [reviews_url, reviews_url]  # try, then one retry
+        candidate_urls = build_candidate_urls(url)
 
         reviews_list = []
         page_title = ""
@@ -287,12 +222,7 @@ def analyze():
         avg_tb_score = sum(tb_scores) / len(tb_scores)
         avg_vader_score = sum(vader_scores) / len(vader_scores)
 
-        if avg_vader_score > 0.05:
-            interpretation = "Overall Positive"
-        elif avg_vader_score < -0.05:
-            interpretation = "Overall Negative"
-        else:
-            interpretation = "Overall Neutral"
+        interpretation = interpret_sentiment(avg_vader_score)
 
         all_reviews_text = " ".join(reviews_list)
         summary = generate_ai_summary(all_reviews_text) 

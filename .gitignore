@@ -3,3 +3,4 @@ venv/
 __pycache__/
 *.pyc
 chromedriver.exe
+.pytest_cache/
